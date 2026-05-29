@@ -1,0 +1,38 @@
+//@version=5
+indicator("criptosefa Fear & Greed Index v1.2", shorttitle="F&G", overlay=false)
+
+// Parametreler
+rsiLength = input.int(14, title="RSI Periyodu")
+atrLength = input.int(14, title="ATR Periyodu")
+vixSymbol = "VIX" // VIX endeksi için sembol
+
+// RSI Hesaplama
+rsi = ta.rsi(close, rsiLength)
+
+// ATR Hesaplama
+atr = ta.atr(atrLength)
+
+// VIX Hesaplama (Volatilite Endeksi)
+vix = request.security(vixSymbol, "D", close)
+
+// Percent Rank Hesaplama (Yüzdelik Sıralama)
+rsiRank = ta.percentrank(rsi, 252)
+atrRank = ta.percentrank(atr, 252)
+vixRank = ta.percentrank(vix, 252)
+
+// Fear & Greed Index Hesaplama
+fearGreedIndex = (rsiRank + atrRank + vixRank) / 3
+
+// Değerleri 0-100 arasında sınırlıyoruz
+fearGreedIndex := math.min(math.max(fearGreedIndex, 0), 100)  // Buradaki `:=` operatörü ile mevcut değeri güncelliyoruz
+
+// Grafikte Görselleştirme
+plot(fearGreedIndex, title="Fear & Greed Index", color=color.blue, linewidth=2)
+
+// Korku ve Açgözlülük için Sınırlar
+hline(35, title="Korku Eşiği", color=color.rgb(10, 245, 49), linestyle=hline.style_dotted)
+hline(80, title="Açgözlülük Eşiği", color=color.rgb(201, 16, 16), linestyle=hline.style_dotted)
+
+// Grafik Arka Planı
+bgcolor(fearGreedIndex < 35 ? color.new(#08fa3d, 90) : fearGreedIndex > 70 ? color.new(#f30c0c, 90) : na)
+
