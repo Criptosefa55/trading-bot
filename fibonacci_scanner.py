@@ -1,3 +1,10 @@
+# =====================================================
+# 1️⃣ KURULUMLAR (COLAB)
+# =====================================================
+!pip install -q pandas numpy ta scikit-learn
+!pip install -q git+https://github.com/rongardF/tvdatafeed
+
+
 import pandas as pd
 from tvDatafeed import TvDatafeed, Interval
 import time
