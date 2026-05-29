@@ -1,1 +1,274 @@
+//@version=5
+indicator('CRİPTOSEFA BEAR BULL', overlay=false, precision=2, shorttitle='CRİPTOSEFA BEAR BULL ')
+
+
+rsiShowInput          = input(true, title='Show RSI', group='Show/Hide Settings')
+maShowInput           = input(false, title='Show MA', group='Show/Hide Settings')
+showRSIMAInput        = input(true, title='Show RSIMA Cloud', group='Show/Hide Settings')
+rsiBandShowInput      = input(true, title='Show Oversold/Overbought Lines', group='Show/Hide Settings')
+rsiBandExtShowInput   = input(true, title='Show Oversold/Overbought Extended Lines', group='Show/Hide Settings')
+rsiHighlightShowInput = input(true, title='Show Oversold/Overbought Highlight Lines', group='Show/Hide Settings')
+DivergenceShowInput   = input(true, title='Show RSI Divergence Labels', group='Show/Hide Settings')
+
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- RSI Input Settings ----------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+rsiSourceInput  = input.source(close, 'Source', group='RSI Settings')
+rsiLengthInput  = input.int(14, minval=1, title='RSI Length', group='RSI Settings', tooltip='Here we set the RSI lenght')
+rsiColorInput   = input.color(#26a69a, title="RSI Color",  group='RSI Settings')
+rsimaColorInput = input.color(#ef534f, title="RSIMA Color",  group='RSI Settings')
+rsiBandColorInput = input.color(#787B86, title="RSI Band Color",  group='RSI Settings')
+rsiUpperBandExtInput = input.int(title='RSI Overbought Extended Line', defval=80, minval=50, maxval=100, group='RSI Settings')
+rsiUpperBandInput   = input.int(title='RSI Overbought Line', defval=70, minval=50, maxval=100, group='RSI Settings')
+rsiLowerBandInput   = input.int(title='RSI Oversold Line', defval=30, minval=0, maxval=50, group='RSI Settings')
+rsiLowerBandExtInput = input.int(title='RSI Oversold Extended Line', defval=20, minval=0, maxval=50, group='RSI Settings')
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- MA Input Settings -----------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+maTypeInput = input.string("EMA", title="MA Type", options=["SMA", "Bollinger Bands", "EMA", "SMMA (RMA)", "WMA", "VWMA"], group="MA Settings")
+maLengthInput = input.int(14, title="MA Length", group="MA Settings")
+maColorInput = input.color(color.yellow, title="MA Color",  group='MA Settings') //#7E57C2
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- Divergence Input Settings ---------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+lbrInput        = input(title="Pivot Lookback Right", defval=2, group='RSI Divergence Settings')
+lblInput        = input(title="Pivot Lookback Left", defval=2, group='RSI Divergence Settings')
+lbRangeMaxInput = input(title="Max of Lookback Range", defval=10, group='RSI Divergence Settings')
+lbRangeMinInput = input(title="Min of Lookback Range", defval=2, group='RSI Divergence Settings')
+
+plotBullInput       = input(title="Plot Bullish", defval=true, group='RSI Divergence Settings')
+plotHiddenBullInput = input(title="Plot Hidden Bullish", defval=true, group='RSI Divergence Settings')
+plotBearInput       = input(title="Plot Bearish", defval=true, group='RSI Divergence Settings')
+plotHiddenBearInput = input(title="Plot Hidden Bearish", defval=true, group='RSI Divergence Settings')
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- RSI Calculation -------------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+rsi         = ta.rsi(rsiSourceInput, rsiLengthInput)
+rsiprevious = rsi[1]
+
+rsi15m = request.security(syminfo.tickerid, "15", ta.rsi(rsiSourceInput, rsiLengthInput))
+rsi1h  = request.security(syminfo.tickerid, "60", ta.rsi(rsiSourceInput, rsiLengthInput))
+rsi4h  = request.security(syminfo.tickerid, "240", ta.rsi(rsiSourceInput, rsiLengthInput))
+rsi1d  = request.security(syminfo.tickerid, "1440", ta.rsi(rsiSourceInput, rsiLengthInput))
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- MA Calculation -------------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ma(source, length, type) =>
+    switch type
+        "SMA" => ta.sma(source, length)
+        "Bollinger Bands" => ta.sma(source, length)
+        "EMA" => ta.ema(source, length)
+        "SMMA (RMA)" => ta.rma(source, length)
+        "WMA" => ta.wma(source, length)
+        "VWMA" => ta.vwma(source, length)
+
+rsiMA         = ma(rsi, maLengthInput, maTypeInput)
+rsiMAPrevious = rsiMA[1]
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- Stoch RSI Settings + Calculation --------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+showStochRSI    = input(false, title="Show Stochastic RSI", group='Stochastic RSI Settings')
+smoothK         = input.int(title="Stochastic K", defval=3, minval=1,  maxval=10, group='Stochastic RSI Settings')
+smoothD         = input.int(title="Stochastic D", defval=4, minval=1,  maxval=10, group='Stochastic RSI Settings')
+lengthRSI       = input.int(title="Stochastic RSI Lenght", defval=14, minval=1, group='Stochastic RSI Settings')
+lengthStoch     = input.int(title="Stochastic Lenght", defval=14, minval=1, group='Stochastic RSI Settings')
+
+rsi1    = request.security(syminfo.tickerid, "15", ta.rsi(rsiSourceInput, lengthRSI))
+k       = request.security(syminfo.tickerid, "15", ta.sma(ta.stoch(rsi1, rsi1, rsi1, lengthStoch), smoothK)) //Blue Line
+d       = request.security(syminfo.tickerid, "15", ta.sma(k, smoothD)) //Red Line
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- Divergence Settings ------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+bearColor = color.red
+bullColor = color.green
+hiddenBullColor = color.new(color.green, 50)
+hiddenBearColor = color.new(color.red, 50)
+textColor = color.white
+noneColor = color.new(color.white, 100)
+osc = rsi
+
+plFound = na(ta.pivotlow(osc, lblInput, lbrInput)) ? false : true
+phFound = na(ta.pivothigh(osc, lblInput, lbrInput)) ? false : true
+_inRange(cond) =>
+	bars = ta.barssince(cond == true)
+	lbRangeMinInput <= bars and bars <= lbRangeMaxInput
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- Define Plot & Line Colors ---------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+rsiColor = rsi >= rsiMA ? rsiColorInput : rsimaColorInput
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- Plot Lines ------------------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+hline(50, title='RSI Baseline', color=color.new(rsiBandColorInput, 50), linestyle=hline.style_dashed, editable=false)   
+hline(rsiBandExtShowInput ? rsiUpperBandExtInput : na,  title='RSI Upper Band',  color=color.new(rsiBandColorInput, 10), linestyle=hline.style_dashed, editable=false)  
+hline(rsiBandShowInput ? rsiUpperBandInput : na,  title='RSI Upper Band',  color=color.new(rsiBandColorInput, 10), linestyle=hline.style_dashed, editable=false) 
+hline(rsiBandShowInput ? rsiLowerBandInput : na,  title='RSI Upper Band',  color=color.new(rsiBandColorInput, 10), linestyle=hline.style_dashed, editable=false) 
+hline(rsiBandExtShowInput ? rsiLowerBandExtInput : na,  title='RSI Upper Band',  color=color.new(rsiBandColorInput, 10), linestyle=hline.style_dashed, editable=false)
+
+bgcolor(rsiHighlightShowInput ? rsi >= rsiUpperBandExtInput ? color.new(rsiColorInput, 75) : na : na, title="Show Extended Oversold Highlight", editable=false)
+bgcolor(rsiHighlightShowInput ? rsi >= rsiUpperBandInput ? rsi < rsiUpperBandExtInput ? color.new(#64ffda, 90) : na : na: na, title="Show Overbought Highlight", editable=false)
+bgcolor(rsiHighlightShowInput ? rsi <= rsiLowerBandExtInput ? color.new(rsimaColorInput, 75) : na : na, title="Show Oversold Highlight", editable=false)
+bgcolor(rsiHighlightShowInput ? rsi <= rsiLowerBandInput ? rsi > rsiLowerBandExtInput ? color.new(#F43E32, 90) : na : na : na, title="Show Extended Oversold Highlight", editable=false)
+
+maPlot     = plot(maShowInput ? rsiMA : na, title='MA', color=color.new(maColorInput,0), linewidth=1)
+rsiMAPlot  = plot(showRSIMAInput ? rsiMA : na, title="RSI EMA", color=color.new(rsimaColorInput,0), editable=false, display=display.none)
+rsiPlot    = plot(rsiShowInput ? rsi : na, title='RSI', color=color.new(rsiColor,0), linewidth=1)
+fill(rsiPlot, rsiMAPlot, color=color.new(rsiColor, 70), title="RSIMA Cloud")
+
+plot(showStochRSI ? k : na, title='Stochastic K', color=color.new(color.blue,50), linewidth=1)
+plot(showStochRSI ? d : na, title='Stochastic D', color=color.new(color.red,50), linewidth=1)
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- Plot Divergence -------------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+// Regular Bullish
+// Osc: Higher Low
+oscHL = osc[lbrInput] > ta.valuewhen(plFound, osc[lbrInput], 1) and _inRange(plFound[1])
+
+// Price: Lower Low
+priceLL = low[lbrInput] < ta.valuewhen(plFound, low[lbrInput], 1)
+bullCond = plotBullInput and priceLL and oscHL and plFound
+
+plot(
+     plFound ? osc[lbrInput] : na,
+     offset=-lbrInput,
+     title="Regular Bullish",
+     linewidth=2,
+     color=(bullCond ? bullColor : noneColor)
+     )
+
+plotshape(
+     DivergenceShowInput ? bullCond ? osc[lbrInput] : na : na,
+     offset=-lbrInput,
+     title="Regular Bullish Label",
+     text=" Bull ",
+     style=shape.labelup,
+     location=location.absolute,
+     color=bullColor,
+     textcolor=textColor
+     )
+
+//------------------------------------------------------------------------------
+// Hidden Bullish
+// Osc: Lower Low
+
+oscLL = osc[lbrInput] < ta.valuewhen(plFound, osc[lbrInput], 1) and _inRange(plFound[1])
+
+// Price: Higher Low
+priceHL = low[lbrInput] > ta.valuewhen(plFound, low[lbrInput], 1)
+hiddenBullCond = plotHiddenBullInput and priceHL and oscLL and plFound
+
+plot(
+	 plFound ? osc[lbrInput] : na,
+	 offset=-lbrInput,
+	 title="Hidden Bullish",
+	 linewidth=2,
+	 color=(hiddenBullCond ? hiddenBullColor : noneColor)
+	 )
+
+plotshape(
+	 DivergenceShowInput ? hiddenBullCond ? osc[lbrInput] : na : na,
+	 offset=-lbrInput,
+	 title="Hidden Bullish Label",
+	 text=" H Bull ",
+	 style=shape.labelup,
+	 location=location.absolute,
+	 color=bullColor,
+	 textcolor=textColor
+	 )
+
+//------------------------------------------------------------------------------
+// Regular Bearish
+// Osc: Lower High
+oscLH = osc[lbrInput] < ta.valuewhen(phFound, osc[lbrInput], 1) and _inRange(phFound[1])
+
+// Price: Higher High
+priceHH = high[lbrInput] > ta.valuewhen(phFound, high[lbrInput], 1)
+bearCond = plotBearInput and priceHH and oscLH and phFound
+
+plot(
+	 phFound ? osc[lbrInput] : na,
+	 offset=-lbrInput,
+	 title="Regular Bearish",
+	 linewidth=2,
+	 color=(bearCond ? bearColor : noneColor)
+	 )
+
+plotshape(
+	 DivergenceShowInput ? bearCond ? osc[lbrInput] : na : na,
+	 offset=-lbrInput,
+	 title="Regular Bearish Label",
+	 text=" Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor
+	 )
+
+//------------------------------------------------------------------------------
+// Hidden Bearish
+// Osc: Higher High
+oscHH = osc[lbrInput] > ta.valuewhen(phFound, osc[lbrInput], 1) and _inRange(phFound[1])
+
+// Price: Lower High
+priceLH = high[lbrInput] < ta.valuewhen(phFound, high[lbrInput], 1)
+hiddenBearCond = plotHiddenBearInput and priceLH and oscHH and phFound
+
+plot(
+	 phFound ? osc[lbrInput] : na,
+	 offset=-lbrInput,
+	 title="Hidden Bearish",
+	 linewidth=2,
+	 color=(hiddenBearCond ? hiddenBearColor : noneColor)
+	 )
+
+plotshape(
+	 DivergenceShowInput ? hiddenBearCond ? osc[lbrInput] : na : na,
+	 offset=-lbrInput,
+	 title="Hidden Bearish Label",
+	 text=" H Bear ",
+	 style=shape.labeldown,
+	 location=location.absolute,
+	 color=bearColor,
+	 textcolor=textColor
+	 )
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+//--- RSI Info Table Setting ------------------------------------------------------------------------------------------------------------------------------------------
+//---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+width_c0 = 0
+width_c1 = 0
+
+if rsiShowInput
+    var rsi_Table = table.new(position=position.middle_right, columns=2, rows=5, bgcolor=color.rgb(54,58,69,50), frame_color=color.black, frame_width=2, border_width=0)
+
+    table.cell(table_id=rsi_Table, column=0, row=0, text=" RSI Current:", width=width_c0, text_color=color.white, text_halign='right')
+    table.cell(table_id=rsi_Table, column=0, row=1, text=" RSI 15m:",width=width_c0, text_color=color.orange, text_halign='right')
+    table.cell(table_id=rsi_Table, column=0, row=2, text=" RSI 1h:",width=width_c0, text_color=color.orange, text_halign='right')
+    table.cell(table_id=rsi_Table, column=0, row=3, text=" RSI 4h:",width=width_c0, text_color=color.orange, text_halign='right')
+    table.cell(table_id=rsi_Table, column=0, row=4, text=" RSI 1d:",width=width_c0, text_color=color.orange, text_halign='right')
+
+    table.cell(table_id=rsi_Table, column=1, row=0, text=str.format("{0,number,#.##} ", rsi), width=width_c1, text_color=(rsi < 50 ? color.red:color.green), text_halign='left')
+    table.cell(table_id=rsi_Table, column=1, row=1, text=str.format("{0,number,#.##} ", rsi15m), width=width_c1, text_color=(rsi15m < 50 ? color.red:color.green), text_halign='left')
+    table.cell(table_id=rsi_Table, column=1, row=2, text=str.format("{0,number,#.##} ", rsi1h), width=width_c1, text_color=(rsi1h < 50 ? color.red:color.green), text_halign='left')
+    table.cell(table_id=rsi_Table, column=1, row=3, text=str.format("{0,number,#.##} ", rsi4h), width=width_c1, text_color=(rsi4h < 50 ? color.red:color.green), text_halign='left')
+    table.cell(table_id=rsi_Table, column=1, row=4, text=str.format("{0,number,#.##} ", rsi1d), width=width_c1, text_color=(rsi1d < 50 ? color.red:color.green), text_halign='left')
+
+
+
+//------------------------------------------------------
+//--- Alerts -------------------------------------------
+//------------------------------------------------------
+
+
+
 
