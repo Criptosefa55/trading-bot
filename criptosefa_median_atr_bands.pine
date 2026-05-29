@@ -1,0 +1,29 @@
+//@version=5
+indicator("criptosefa Median with HL2 and ATR Bands", overlay=true)
+
+// Kullanıcı girdileri
+median_length = input.int(14, minval=1, title="Median Length") // Medyan hesaplama süresi
+show_bands = input.bool(true, title="Show Upper/Lower Bands?")
+atr_multiplier = input.float(2.0, title="ATR Multiplier")
+
+// HL2 hesaplama
+hl2_value = (high + low) / 2
+
+// HL2'nin hareketli ortalamasını alarak medyanı hesaplama
+median = ta.sma(hl2_value, median_length) // HL2'nin hareketli ortalaması alınır
+
+// ATR hesaplama ve bantlar
+atr_value = ta.atr(median_length)
+upper_band = median + atr_multiplier * atr_value
+lower_band = median - atr_multiplier * atr_value
+
+// Medyan çizgisinin rengini belirleme
+median_color = close > median ? color.yellow : close < median ? color.red : color.blue
+
+// Çizimler
+plot(median, color=median_color, linewidth=2, title="Median Line") // Medyan çizgisi
+plot(show_bands ? upper_band : na, color=color.green, linewidth=1, title="Upper Band") // Üst bant
+plot(show_bands ? lower_band : na, color=color.red, linewidth=1, title="Lower Band")   // Alt bant
+
+// Grafikteki renkli alan (isteğe bağlı)
+bgcolor(show_bands ? (close > upper_band ? color.new(color.green, 85) : close < lower_band ? color.new(color.red, 85) : na) : na, title="Background Highlight")
